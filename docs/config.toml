@@ -333,6 +333,12 @@ pygmentsStyle = "friendly"
       identifier = "parameters"
       weight = 407
       parent = "porter-architecture"
+	[[menu.main]]
+      name = "File Formats"
+      url = "/file-formats/"
+      identifier = "file-formats"
+      weight = 408
+      parent = "porter-architecture"
 
   # Operator
   [[menu.main]]
@@ -451,11 +457,6 @@ pygmentsStyle = "friendly"
     name = "Configuration"
     url = "/configuration"
     identifier = "configuration"
-    parent = "references"
-  [[menu.main]]
-    name = "File Formats"
-    url = "/reference/file-formats/"
-    identifier = "file-formats"
     parent = "references"
   [[menu.main]]
     name = "Compatible Registries"
