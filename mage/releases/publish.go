@@ -1,6 +1,9 @@
 package releases
 
 import (
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
 	"fmt"
@@ -13,6 +16,9 @@ import (
 
 	"get.porter.sh/porter/mage/tools"
 	"get.porter.sh/porter/pkg"
+	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
+	"github.com/Azure/azure-sdk-for-go/sdk/keyvault/azsecrets"
+	"github.com/Azure/go-autorest/autorest/azure"
 	"github.com/carolynvs/magex/mgx"
 	"github.com/carolynvs/magex/shx"
 	"github.com/magefile/mage/mg"
@@ -78,6 +84,31 @@ exec echo "$GITHUB_TOKEN"
 	script := filepath.Join(pwd, askpass)
 
 	must.Command("git", "config", "core.askPass", script).In(dir).RunV()
+}
+
+func getAZKeyvaultCli() (*azsecrets.Client, error) {
+	keyVaultName := os.Getenv("AZURE_KEY_VAULT_NAME")
+	keyVaultUrl := fmt.Sprintf("https://%s.%s", keyVaultName, azure.PublicCloud.KeyVaultDNSSuffix)
+
+	cred, err := azidentity.NewDefaultAzureCredential(nil)
+	if err != nil {
+		return nil, err
+	}
+
+	return azsecrets.NewClient(keyVaultUrl, cred, nil)
+}
+
+func getSigningKey(client *azsecrets.Client, keyName string) (string, error) {
+	res, err := client.GetSecret(context.Background(), keyName, nil)
+	if err != nil {
+		return "", err
+	}
+
+	if res.Value == nil {
+		return "", errors.Errorf("failed to get singing key for %s", keyName)
+	}
+
+	return *res.Value, nil
 }
 
 func publishPackage(pkgType string, name string) {
@@ -193,18 +224,14 @@ func AddFilesToRelease(repo string, tag string, dir string) {
 
 	checksumFiles := make([]string, len(files))
 	for i, file := range files {
-		checksumFile, added := AddChecksumExt(file)
-		if !added {
-			checksumFiles[i] = file
-			continue
-		}
+		checksumFile := AddFileExt(file, ".sha256sum")
+		checksumSigFile := AddFileExt(file, ".sig")
 
-		err := createChecksumFile(file, checksumFile)
+		err := createChecksumFile(file, checksumFile, checksumSigFile)
 		if err != nil {
 			mgx.Must(errors.Wrapf(err, "failed to generate checksum file for asset %s", file))
 		}
 		checksumFiles[i] = checksumFile
-
 	}
 
 	files = append(files, checksumFiles...)
@@ -224,6 +251,26 @@ func AddFilesToRelease(repo string, tag string, dir string) {
 	}
 }
 
+func sign(data []byte) (string, error) {
+	cli, err := getAZKeyvaultCli()
+	if err != nil {
+		return "", err
+	}
+	keyStr, err := getSigningKey(cli, "private-key")
+	if err != nil {
+		return "", err
+	}
+
+	key := ed25519.NewKeyFromSeed([]byte(keyStr))
+
+	sig, err := key.Sign(rand.Reader, data, nil)
+	if err != nil {
+		return "", err
+	}
+
+	return hex.EncodeToString(sig), nil
+
+}
 func releaseExists(repo string, version string) bool {
 	return shx.RunE("gh", "release", "view", "-R", repo, version) == nil
 }
@@ -240,12 +287,12 @@ func listFiles(dir string) []string {
 	return names
 }
 
-func AddChecksumExt(path string) (string, bool) {
-	if filepath.Ext(path) == ".sha256sum" {
-		return path, false
+func AddFileExt(path string, ext string) string {
+	if filepath.Ext(path) == ext {
+		return path
 	}
 
-	return path + ".sha256sum", true
+	return path + ext
 }
 
 func GenerateChecksum(data io.Reader, path string) (string, error) {
@@ -264,7 +311,7 @@ func AppendDataPath(data []byte, path string) string {
 	return hex.EncodeToString(data) + "  " + filepath.Base(path)
 }
 
-func createChecksumFile(contentPath string, checksumFile string) error {
+func createChecksumFile(contentPath string, checksumFile string, sigFile string) error {
 	data, err := os.Open(contentPath)
 	if err != nil {
 		return err

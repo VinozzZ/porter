@@ -157,6 +157,12 @@ stages:
               mage PublishPorter PublishMixins
             env:
               GITHUB_TOKEN: $(GITHUB_TOKEN)
+              AZURE_CLIENT_ID: $(AZURE_CLIENT_ID)
+              AZURE_CLIENT_SECRET: $(AZURE_CLIENT_SECRET)
+              AZURE_TENANT_ID: $(AZURE_TENANT_ID)
+              AZURE_KEY_VAULT_NAME: $(AZURE_KEY_VAULT_NAME)
+              CHECKSUM_PRIVATE_KEY_NAME: $(CHECKSUM_PRIVATE_KEY_NAME)
+              CHECKSUM_PUBLIC_KEY_NAME: $(CHECKSUM_PUBLIC_KEY_NAME)
             displayName: "Publish Porter Binaries"
 
       - job: publish_docker
