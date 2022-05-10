@@ -120,6 +120,6 @@ func TestHelloBundle(t *testing.T) {
 	// Test that outputs are collected when a bundle fails
 	_, _, err = test.RunPorter("install", "fail-with-outputs", "--reference", testdata.MyBunsRef, "-c=mybuns", "-p=mybuns", "--param", "chaos_monkey=true")
 	require.Error(t, err, "the chaos monkey should have failed the installation")
-	myLogs, _ := test.RequirePorter("installation", "outputs", "show", "mylogs", "-i=fail-with-outputs")
+	myLogs, _ := test.RequirePorter("installation", "outputs", "list", "-i=fail-with-outputs")
 	require.Contains(t, myLogs, "Hello, porterci")
 }
